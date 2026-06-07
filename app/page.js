@@ -1654,17 +1654,41 @@ export default function Home() {
             <OutlineGroups
               outline={outline}
               currentChapterIndex={currentChapterIndex}
-              onSelect={(idx) => { setCurrentChapterIndex(idx); setChapterContent(""); setAuditData(null); }}
+              onSelect={(idx) => { setCurrentChapterIndex(idx); setChapterContent(outline[idx]?.content || ""); setAuditData(null); setContinuationIdeas([]); }}
               openGroups={outlineOpenGroups}
               toggleGroup={(key) => setOutlineOpenGroups(prev => ({ ...prev, [key]: prev[key] === false ? true : false }))}
             />
 
             {outline[currentChapterIndex] && (
-              <div className="bg-gray-50 rounded-xl p-4 my-4">
-                <p className="font-semibold text-gray-800">{outline[currentChapterIndex].title}</p>
-                <p className="text-sm text-gray-500 mt-1">🪝 {outline[currentChapterIndex].hook}</p>
+              <div className="bg-gray-50 rounded-xl p-4 my-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 shrink-0">第{currentChapterIndex + 1}章</span>
+                  <input
+                    className="flex-1 font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none px-1 py-0.5 text-sm transition-colors"
+                    value={outline[currentChapterIndex].title}
+                    onChange={(e) => {
+                      const o = [...outline];
+                      o[currentChapterIndex] = { ...o[currentChapterIndex], title: e.target.value };
+                      setOutline(o);
+                    }}
+                    placeholder="输入章节标题…"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 shrink-0">🪝</span>
+                  <input
+                    className="flex-1 text-sm text-gray-500 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none px-1 py-0.5 transition-colors"
+                    value={outline[currentChapterIndex].hook || ""}
+                    onChange={(e) => {
+                      const o = [...outline];
+                      o[currentChapterIndex] = { ...o[currentChapterIndex], hook: e.target.value };
+                      setOutline(o);
+                    }}
+                    placeholder="章节钩子/悬念…"
+                  />
+                </div>
                 {outline[currentChapterIndex].content && (
-                  <p className="text-xs text-green-500 mt-1">✅ 已保存正文 · {outline[currentChapterIndex].content.length}字</p>
+                  <p className="text-xs text-green-500">✅ 已保存正文 · {outline[currentChapterIndex].content.length}字</p>
                 )}
               </div>
             )}

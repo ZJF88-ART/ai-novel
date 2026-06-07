@@ -110,7 +110,7 @@ export async function POST(req) {
     const chapterCounts = { short: 20, medium: 40, long: 60, epic: 80 };
     const targetCount = chapterCounts[novelLength] || 40;
     const ctx = buildContext();
-    const prompt = `设定：${ctx}\n开篇钩子：${openingHook}\n请生成${targetCount}章大纲，每章格式：标题：xxx，钩子：xxx（一句话悬念）。按顺序从第1章到第${targetCount}章。不要多余内容。`;
+    const prompt = `设定：${ctx}\n开篇钩子：${openingHook}\n请生成${targetCount}章大纲，每章格式：标题：一个吸引人的具体标题（如"血月降临"而非"第三章"），钩子：xxx（一句话悬念）。按顺序从第1章到第${targetCount}章。标题要有辨识度和画面感，让读者一眼想看。不要多余内容。`;
     const result = await callAI([
       { role: "system", content: "你是小说结构师，输出简洁大纲。" },
       { role: "user", content: prompt },
