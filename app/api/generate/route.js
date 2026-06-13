@@ -55,12 +55,13 @@ export async function POST(req) {
   }
 
   const buildContext = () => {
-    let ctx = `世界观：${worldBackground || worldType}。\n主角：${protagonist.name}（${protagonist.personality}，能力${protagonist.ability}，弱点${protagonist.weakness}）。\n`;
+    const p = protagonist || {};
+    let ctx = `世界观：${worldBackground || worldType || "奇幻世界"}。\n主角：${p.name || "主角"}（${p.personality || "未设定"}，能力${p.ability || "未设定"}，弱点${p.weakness || "未设定"}）。\n`;
     if (allies?.length) ctx += `正派：${allies.map(a => `${a.name}(${a.relation})`).join("、")}。\n`;
     if (enemies?.length) ctx += `反派：${enemies.map(e => `${e.name}(${e.relation})`).join("、")}。\n`;
-    ctx += `风格要求：${style}。`;
+    ctx += `风格要求：${style || "热血"}。`;
     if (economyMode) {
-      ctx = `世界观：${worldBackground?.slice(0, 80) || worldType}。主角：${protagonist.name}。正派/反派：${[...(allies||[]).map(a=>a.name), ...(enemies||[]).map(e=>e.name)].join(",")}。风格：${style}。`;
+      ctx = `世界观：${(worldBackground || worldType || "奇幻").slice(0, 80)}。主角：${p.name || "主角"}。正派/反派：${[...(allies||[]).map(a=>a.name), ...(enemies||[]).map(e=>e.name)].filter(Boolean).join(",") || "无"}。风格：${style || "热血"}。`;
     }
     return ctx;
   };
@@ -121,24 +122,47 @@ export async function POST(req) {
     const chapterCounts = { short: 20, medium: 40, long: 60, epic: 80 };
     const targetCount = chapterCounts[novelLength] || 40;
     const ctx = buildContext();
-    const prompt = `设定：${ctx}\n开篇钩子：${openingHook}\n请生成${targetCount}章大纲，每章格式：标题：一个吸引人的具体标题（如"血月降临"而非"第三章"），钩子：xxx（一句话悬念）。按顺序从第1章到第${targetCount}章。标题要有辨识度和画面感，让读者一眼想看。不要多余内容。`;
+    const prompt = `设定：${ctx}\n开篇钩子：${openingHook}\n请严格按以下格式生成${targetCount}章大纲，每章一行：\n第X章 标题：具体标题 钩子：一句话悬念\n不要写正文，不要写摘要，只写标题和钩子。按顺序从第1章到第${targetCount}章。标题要有辨识度。`;
+    const maxTokens = economyMode ? Math.max(800, targetCount * 30) : Math.max(2000, targetCount * 60);
     const result = await callAI([
-      { role: "system", content: "你是小说结构师，输出简洁大纲。" },
+      { role: "system", content: "你是小说结构师。严格按格式输出每章一行。不要省略任何章节。" },
       { role: "user", content: prompt },
-    ], Math.max(1200, targetCount * 80));
-    const lines = result.split("\n");
+    ], maxTokens);
+    const lines = result.split("\n").filter(l => l.trim());
     const outline = [];
-    let current = {};
-    for (let line of lines) {
-      if (line.startsWith("标题：")) {
-        if (current.title) outline.push({ ...current, summary: "" });
-        current = { title: line.replace("标题：", "").trim() };
-      }
-      if (line.startsWith("钩子：")) {
-        current.hook = line.replace("钩子：", "").trim();
+    // Try multiple parse strategies
+    for (const line of lines) {
+      // Strategy 1: "第X章 标题：xxx 钩子：xxx" on same line
+      let titleMatch = line.match(/第\d+章\s*[：:.\s]\s*(.+?)(?:\s*钩子[：:]|$)/);
+      let hookMatch = line.match(/钩子[：:]\s*(.+?)$/);
+      // Strategy 2: "标题：xxx" on its own line
+      if (!titleMatch) titleMatch = line.match(/标题[：:]\s*(.+)/);
+      if (titleMatch) {
+        let title = titleMatch[1].trim();
+        title = title.replace(/^[：:\s]+/, "").trim();
+        if (title) {
+          outline.push({
+            title: title,
+            hook: (hookMatch ? hookMatch[1].trim() : "悬念继续"),
+            summary: "",
+          });
+        }
       }
     }
-    if (current.title) outline.push({ ...current, summary: "" });
+    // Fallback: multi-line format (title line, hook line)
+    if (outline.length === 0) {
+      let current = {};
+      for (const line of lines) {
+        if (line.includes("标题：") || line.includes("标题:")) {
+          if (current.title) outline.push({ ...current, summary: "" });
+          current = { title: line.replace(/.*标题[：:]\s*/, "").trim() };
+        } else if (line.includes("钩子：") || line.includes("钩子:")) {
+          current.hook = line.replace(/.*钩子[：:]\s*/, "").trim();
+          if (current.title) { outline.push({ ...current, summary: "" }); current = {}; }
+        }
+      }
+      if (current.title) outline.push({ ...current, summary: "" });
+    }
     if (outline.length === 0) outline.push({ title: "第一章", hook: "故事开始了", summary: "" });
     return Response.json({ outline: outline.slice(0, targetCount) });
   }
