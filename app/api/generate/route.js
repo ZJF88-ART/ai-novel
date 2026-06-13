@@ -2,7 +2,7 @@ export async function POST(req) {
   const body = await req.json();
   const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook } = body;
 
-  // 支持两个国内 AI 平台
+  // AI 平台配置
   const PROVIDERS = {
     deepseek: {
       url: "https://api.deepseek.com/v1/chat/completions",
@@ -13,6 +13,11 @@ export async function POST(req) {
       url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
       key: process.env.ZHIPU_API_KEY,
       model: "glm-4-flash",
+    },
+    agnes: {
+      url: "https://api.agnes.ai/v1/chat/completions",
+      key: process.env.AGNES_API_KEY,
+      model: "agnes-chat",
     },
   };
 
