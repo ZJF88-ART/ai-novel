@@ -17,7 +17,7 @@ export async function POST(req) {
   const PROVIDERS = {
     deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: apiKey || process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
     zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: apiKey || process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
-    agnes: { url: "https://api.agnes.ai/v1/chat/completions", key: apiKey || process.env.AGNES_API_KEY, model: "agnes-chat" },
+    agnes: { url: "https://apihub.agnes-ai.com/v1/chat/completions", key: apiKey || process.env.AGNES_API_KEY, model: "agnes-2.0-flash" },
   };
 
   const selected = PROVIDERS[provider] || PROVIDERS.deepseek;
