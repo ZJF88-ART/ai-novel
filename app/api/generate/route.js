@@ -11,19 +11,19 @@ export async function GET() {
 export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { return Response.json({ error: "请求格式错误，请检查 JSON 格式" }, { status: 400 }); }
-  const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook } = body;
+  const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook, apiKey } = body;
 
   // AI 平台配置
   const PROVIDERS = {
-    deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
-    zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
-    agnes: { url: "https://api.agnes.ai/v1/chat/completions", key: process.env.AGNES_API_KEY, model: "agnes-chat" },
+    deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: apiKey || process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
+    zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: apiKey || process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
+    agnes: { url: "https://api.agnes.ai/v1/chat/completions", key: apiKey || process.env.AGNES_API_KEY, model: "agnes-chat" },
   };
 
   const selected = PROVIDERS[provider] || PROVIDERS.deepseek;
   if (!selected.key) {
     const names = { deepseek: "DEEPSEEK_API_KEY", zhipu: "ZHIPU_API_KEY", agnes: "AGNES_API_KEY" };
-    return Response.json({ error: `缺少 API 密钥：请在 Vercel 环境变量中设置 ${names[provider] || names.deepseek}` }, { status: 500 });
+    return Response.json({ error: `缺少 API 密钥。请在网站左侧面板输入自定义 Key，或在 Vercel 环境变量中设置 ${names[provider]}` }, { status: 500 });
   }
 
   async function callAI(messages, defaultMax = 1200) {

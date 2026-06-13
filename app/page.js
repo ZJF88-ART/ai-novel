@@ -128,10 +128,10 @@ function incrementUsage() {
 
 /* ===== 预设数据 ===== */
 const WORLD_TYPES = [
-  { value: "fantasy", label: "西幻" },
-  { value: "xianxia", label: "修仙" },
-  { value: "modern", label: "现代" },
-  { value: "apocalypse", label: "末世" },
+  { value: "fantasy", label: "西幻", en: "Fantasy" },
+  { value: "xianxia", label: "修仙", en: "Cultivation" },
+  { value: "modern", label: "现代", en: "Modern" },
+  { value: "apocalypse", label: "末世", en: "Apocalypse" },
 ];
 
 const PERSONALITIES = ["热血", "冷酷", "腹黑", "天真", "温柔", "傲娇", "沉稳", "偏执", "洒脱", "阴郁", "狡黠", "正直", "善良", "懒散", "疯批", "懦弱", "毒舌", "忠犬"];
@@ -276,6 +276,7 @@ export default function Home() {
   const [customStyle, setCustomStyle] = useState("");
   const [economyMode, setEconomyMode] = useState(false);
   const [provider, setProvider] = useState("deepseek");
+  const [customApiKey, setCustomApiKey] = useState("");
   const [novelLength, setNovelLength] = useState("long");
 
   const [openingIdeas, setOpeningIdeas] = useState([]);
@@ -333,9 +334,9 @@ export default function Home() {
 
   /* ===== 自动保存 ===== */
   useEffect(() => {
-    const data = { worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang };
+    const data = { worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang };
     localStorage.setItem("ai-novel-autosave", JSON.stringify(data));
-  }, [worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang]);
+  }, [worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang]);
 
   useEffect(() => {
     try {
@@ -351,6 +352,7 @@ export default function Home() {
       if (d.customStyle) setCustomStyle(d.customStyle);
       if (d.economyMode !== undefined) setEconomyMode(d.economyMode);
       if (d.provider) setProvider(d.provider);
+      if (d.customApiKey) setCustomApiKey(d.customApiKey);
       if (d.novelLength) setNovelLength(d.novelLength);
       if (d.trackerData) setTrackerData(d.trackerData);
       if (d.openingIdeas) setOpeningIdeas(d.openingIdeas);
@@ -403,7 +405,7 @@ export default function Home() {
     if (!canGenerate()) { alert(T("limitReached")); return null; }
     setLoading(true);
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, apiKey: customApiKey || undefined }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       incrementUsage();
@@ -411,6 +413,13 @@ export default function Home() {
       return data;
     } catch (err) { alert("Error: " + err.message); return null; }
     finally { setLoading(false); }
+  };
+
+  const apiFetch = async (body) => {
+    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, apiKey: customApiKey || undefined }) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data;
   };
 
   const generateOpening = async () => {
@@ -422,8 +431,7 @@ export default function Home() {
     setRefinedLoading(true);
     try {
       if (!canGenerate()) { alert(T("limitReached")); return; }
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: openingIdeas.map(i => typeof i === "string" ? i : i.idea) }) });
-      const data = await res.json();
+      const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: openingIdeas.map(i => typeof i === "string" ? i : i.idea) });
       if (data?.ideas) { setOpeningIdeas([...openingIdeas, ...data.ideas]); incrementUsage(); setUsage(getUsageData()); }
     } catch (err) { alert("生成更多失败: " + err.message); }
     finally { setRefinedLoading(false); }
@@ -434,8 +442,7 @@ export default function Home() {
     try {
       if (!canGenerate()) { alert(T("limitReached")); return; }
       const ideaText = typeof openingIdeas[index] === "string" ? openingIdeas[index] : openingIdeas[index].idea;
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: [{ idea: ideaText }], count: 3 }) });
-      const data = await res.json();
+      const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: [{ idea: ideaText }], count: 3 });
       if (data?.ideas?.length > 0) { const ni = [...openingIdeas]; ni[index] = { ...ni[index], refined: data.ideas }; setOpeningIdeas(ni); incrementUsage(); setUsage(getUsageData()); }
     } catch (err) { alert("优化失败: " + err.message); }
     finally { setRefinedLoading(false); setRefiningIndex(null); }
@@ -457,8 +464,7 @@ export default function Home() {
     if (!importNovelText.trim()) { alert(lang === "en" ? "Please paste or upload novel content first" : "请先粘贴或上传小说内容"); return; }
     setImportAnalyzing(true); setImportAnalysis(null);
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "analyze_novel", novelText: importNovelText, provider }) });
-      const data = await res.json(); if (data.error) throw new Error(data.error); if (data.parseError) alert(lang === "en" ? "Partial parse failure, please verify results" : "AI 分析部分失败，请检查结果"); setImportAnalysis(data);
+      const data = await apiFetch({ mode: "analyze_novel", novelText: importNovelText, provider }); if (data.parseError) alert(lang === "en" ? "Partial parse failure, please verify results" : "AI 分析部分失败，请检查结果"); setImportAnalysis(data);
     } catch (err) { alert((lang === "en" ? "Analysis failed: " : "分析失败: ") + err.message); }
     finally { setImportAnalyzing(false); }
   };
@@ -510,8 +516,7 @@ export default function Home() {
       if (!canGenerate()) { alert(T("limitReached")); setContinuationLoading(false); return; }
       const prevSummary = idx > 0 ? (outline[idx - 1]?.summary || "") : "";
       const chapterTitle = outline[idx]?.title || `${lang === "en" ? "Ch " : "第"}${idx + 1}${lang === "en" ? "" : "章"}`;
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "continuation", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, chapterIndex: idx, chapterTitle, previousSummary: prevSummary, novelLength }) });
-      const data = await res.json(); if (data?.ideas) { setContinuationIdeas(data.ideas); incrementUsage(); setUsage(getUsageData()); }
+      const data = await apiFetch({ mode: "continuation", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, chapterIndex: idx, chapterTitle, previousSummary: prevSummary, novelLength }); if (data?.ideas) { setContinuationIdeas(data.ideas); incrementUsage(); setUsage(getUsageData()); }
     } catch (err) {}
     finally { setContinuationLoading(false); }
   };
@@ -526,11 +531,11 @@ export default function Home() {
   const randomEnemyTeam = () => setEnemies(Array.from({ length: 3 }, () => randomEnemy(worldType)));
   const randomProtagonist = () => setProtagonist(randomCharacter(worldType, pick(["male", "female"])));
 
-  const fetchMarketResearch = async () => { setMarketLoading(true); try { const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "market_research", worldType, style: customStyle || style, worldBackground, provider }) }); const data = await res.json(); if (data.error) throw new Error(data.error); setMarketData(data); setMarketCollapsed(false); } catch (err) { alert("调研失败: " + err.message); } finally { setMarketLoading(false); } };
+  const fetchMarketResearch = async () => { setMarketLoading(true); try { const data = await apiFetch({ mode: "market_research", worldType, style: customStyle || style, worldBackground, provider }); setMarketData(data); setMarketCollapsed(false); } catch (err) { alert("调研失败: " + err.message); } finally { setMarketLoading(false); } };
 
-  const fetchStoryTracker = async () => { setTrackerLoading(true); try { const chapterSummaries = outline.map((ch) => ch.summary || "").filter(Boolean); const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "story_tracker", worldType, worldBackground, protagonist, allies, enemies, outline, chapterSummaries, provider }) }); const data = await res.json(); if (data.error) throw new Error(data.error); data._updatedAt = Date.now(); data._updatedChapter = chapterSummaries.length; setTrackerData(data); } catch (err) { alert("追踪失败: " + err.message); } finally { setTrackerLoading(false); } };
+  const fetchStoryTracker = async () => { setTrackerLoading(true); try { const chapterSummaries = outline.map((ch) => ch.summary || "").filter(Boolean); const data = await apiFetch({ mode: "story_tracker", worldType, worldBackground, protagonist, allies, enemies, outline, chapterSummaries, provider }); data._updatedAt = Date.now(); data._updatedChapter = chapterSummaries.length; setTrackerData(data); } catch (err) { alert("追踪失败: " + err.message); } finally { setTrackerLoading(false); } };
 
-  const auditChapter = async () => { if (!chapterContent) { alert(lang === "en" ? "Generate chapter content first" : "请先生成章节内容"); return; } setAuditLoading(true); try { const chars = [{ name: protagonist.name, role: lang === "en" ? "MC" : "主角", personality: protagonist.personality, ability: protagonist.ability, weakness: protagonist.weakness }, ...allies.map(a => ({ name: a.name, role: lang === "en" ? "Ally" : "正派/盟友", personality: a.personality, ability: a.ability, weakness: a.weakness })), ...enemies.map(e => ({ name: e.name, role: lang === "en" ? "Enemy" : "反派/对手", personality: e.personality, ability: e.ability, weakness: e.weakness }))].filter(c => c.name); const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "audit_chapter", chapterContent, characters: chars, provider }) }); const data = await res.json(); if (data.error) throw new Error(data.error); data._auditChapter = currentChapterIndex; setAuditData(data); } catch (err) { alert("审核失败: " + err.message); } finally { setAuditLoading(false); } };
+  const auditChapter = async () => { if (!chapterContent) { alert(lang === "en" ? "Generate chapter content first" : "请先生成章节内容"); return; } setAuditLoading(true); try { const chars = [{ name: protagonist.name, role: lang === "en" ? "MC" : "主角", personality: protagonist.personality, ability: protagonist.ability, weakness: protagonist.weakness }, ...allies.map(a => ({ name: a.name, role: lang === "en" ? "Ally" : "正派/盟友", personality: a.personality, ability: a.ability, weakness: a.weakness })), ...enemies.map(e => ({ name: e.name, role: lang === "en" ? "Enemy" : "反派/对手", personality: e.personality, ability: e.ability, weakness: e.weakness }))].filter(c => c.name); const data = await apiFetch({ mode: "audit_chapter", chapterContent, characters: chars, provider }); data._auditChapter = currentChapterIndex; setAuditData(data); } catch (err) { alert("审核失败: " + err.message); } finally { setAuditLoading(false); } };
 
   const chaptersWithContent = outline.filter((ch) => ch.summary).length;
   const shouldRefreshTracker = chaptersWithContent > 0 && chaptersWithContent % 3 === 0 && (!trackerData || trackerData._updatedChapter !== chaptersWithContent);
@@ -580,7 +585,7 @@ export default function Home() {
           {/* 世界观 */}
           <CollapsibleCard title={T("worldSettings")} icon="🌍">
             <div className="flex flex-wrap gap-2">
-              {WORLD_TYPES.map((t) => (<button key={t.value} type="button" onClick={() => setWorldType(t.value)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${worldType === t.value ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{t.label}</button>))}
+              {WORLD_TYPES.map((t) => (<button key={t.value} type="button" onClick={() => setWorldType(t.value)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${worldType === t.value ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{lang === "en" ? t.en : t.label}</button>))}
             </div>
             <textarea className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none" rows={3} placeholder={lang === "en" ? "Describe your world (best under 100 words)..." : "描述你的世界观（100字以内最佳）…"} value={worldBackground} onChange={(e) => setWorldBackground(e.target.value)} />
           </CollapsibleCard>
@@ -660,6 +665,11 @@ export default function Home() {
               <select value={provider} onChange={(e) => setProvider(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:border-blue-400 outline-none transition-all flex-1">
                 {PROVIDER_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-gray-400 font-medium mb-1 block">🔑 {lang === "en" ? "Custom API Key (test mode)" : "自定义 API Key（测试模式）"}</label>
+              <input type="password" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all" placeholder="sk-..." value={customApiKey} onChange={(e) => setCustomApiKey(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">{lang === "en" ? "Uses your own key, stored in browser only. Overrides Vercel env." : "使用你自己的Key（仅浏览器存储，优先于 Vercel 环境变量）"}</p>
             </div>
           </CollapsibleCard>
 
