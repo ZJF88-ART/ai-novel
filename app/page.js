@@ -717,10 +717,10 @@ export default function Home() {
       <main className={`flex-1 transition-all duration-300 ease-in-out p-6 pt-16 overflow-auto bg-white min-h-screen ${leftPanelOpen ? "lg:ml-[420px]" : ""}`}>
         {/* 续写已有小说 */}
         <div className={`mb-6 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-2xl border border-teal-200 overflow-hidden transition-all ${importPanelOpen ? "shadow-md" : ""}`}>
-          <button type="button" onClick={() => setImportPanelOpen(!importPanelOpen)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-teal-100/30 transition-colors">
+          <div role="button" tabIndex={0} onClick={() => setImportPanelOpen(!importPanelOpen)} onKeyDown={(e) => { if (e.key === "Enter") setImportPanelOpen(!importPanelOpen); }} className="w-full flex items-center justify-between px-5 py-4 hover:bg-teal-100/30 transition-colors cursor-pointer">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">{T("importNovel")}</h2>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${importPanelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-          </button>
+          </div>
           {importPanelOpen && (
             <div className="px-5 pb-5 space-y-4">
               <p className="text-sm text-gray-500">{T("importDesc")}</p>
@@ -753,13 +753,13 @@ export default function Home() {
 
         {/* 市场调研 */}
         <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 overflow-hidden">
-          <button type="button" onClick={() => setMarketCollapsed(!marketCollapsed)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-amber-100/30 transition-colors">
+          <div role="button" tabIndex={0} onClick={() => setMarketCollapsed(!marketCollapsed)} onKeyDown={(e) => { if (e.key === "Enter") setMarketCollapsed(!marketCollapsed); }} className="w-full flex items-center justify-between px-5 py-4 hover:bg-amber-100/30 transition-colors cursor-pointer">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">{T("marketResearch")}</h2>
             <div className="flex items-center gap-2">
               <button onClick={(e) => { e.stopPropagation(); fetchMarketResearch(); }} disabled={marketLoading} className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 transition-all shadow-sm">{marketLoading ? "⏳" : "🔍 " + (lang === "en" ? "Start Research" : "开始深度调研")}</button>
               <svg className={`w-4 h-4 text-gray-400 transition-transform ${!marketCollapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
-          </button>
+          </div>
           {!marketCollapsed && (
             <div className="px-5 pb-5">
               {!marketData && <p className="text-sm text-gray-400">{T("marketHint")}</p>}
