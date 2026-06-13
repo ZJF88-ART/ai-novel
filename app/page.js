@@ -105,9 +105,9 @@ function getUsageData() {
   try {
     const d = JSON.parse(localStorage.getItem("daily-usage") || "{}");
     const today = new Date().toDateString();
-    if (d.date !== today) return { date: today, count: 0, maxFree: 3 };
-    return { ...d, maxFree: d.maxFree || 3 };
-  } catch { return { date: new Date().toDateString(), count: 0, maxFree: 3 }; }
+    if (d.date !== today) return { date: today, count: 0, maxFree: 999 };
+    return { ...d, maxFree: 999 };
+  } catch { return { date: new Date().toDateString(), count: 0, maxFree: 999 }; }
 }
 
 function canGenerate() {
