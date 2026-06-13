@@ -1,52 +1,57 @@
+export async function GET() {
+  // 健康检查
+  const keys = {
+    DEEPSEEK: !!process.env.DEEPSEEK_API_KEY,
+    ZHIPU: !!process.env.ZHIPU_API_KEY,
+    AGNES: !!process.env.AGNES_API_KEY,
+  };
+  return Response.json({ status: "ok", providers: keys, hint: keys.DEEPSEEK ? "DeepSeek ready" : keys.AGNES ? "Agnes ready" : "No API key configured. Add DEEPSEEK_API_KEY or AGNES_API_KEY to Vercel environment variables." });
+}
+
 export async function POST(req) {
-  const body = await req.json();
+  let body;
+  try { body = await req.json(); } catch { return Response.json({ error: "请求格式错误，请检查 JSON 格式" }, { status: 400 }); }
   const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook } = body;
 
   // AI 平台配置
   const PROVIDERS = {
-    deepseek: {
-      url: "https://api.deepseek.com/v1/chat/completions",
-      key: process.env.DEEPSEEK_API_KEY,
-      model: "deepseek-chat",
-    },
-    zhipu: {
-      url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-      key: process.env.ZHIPU_API_KEY,
-      model: "glm-4-flash",
-    },
-    agnes: {
-      url: "https://api.agnes.ai/v1/chat/completions",
-      key: process.env.AGNES_API_KEY,
-      model: "agnes-chat",
-    },
+    deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
+    zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
+    agnes: { url: "https://api.agnes.ai/v1/chat/completions", key: process.env.AGNES_API_KEY, model: "agnes-chat" },
   };
 
   const selected = PROVIDERS[provider] || PROVIDERS.deepseek;
   if (!selected.key) {
-    const name = provider === "zhipu" ? "ZHIPU_API_KEY" : "DEEPSEEK_API_KEY";
-    return Response.json({ error: `Missing ${name}` }, { status: 500 });
+    const names = { deepseek: "DEEPSEEK_API_KEY", zhipu: "ZHIPU_API_KEY", agnes: "AGNES_API_KEY" };
+    return Response.json({ error: `缺少 API 密钥：请在 Vercel 环境变量中设置 ${names[provider] || names.deepseek}` }, { status: 500 });
   }
 
   async function callAI(messages, defaultMax = 1200) {
     let maxTokens = defaultMax;
-    if (economyMode) {
-      maxTokens = Math.floor(defaultMax * 0.6);
+    if (economyMode) maxTokens = Math.floor(defaultMax * 0.6);
+    try {
+      const res = await fetch(selected.url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${selected.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selected.model, messages, temperature: 0.8, max_tokens: maxTokens }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "Unknown");
+        throw new Error(`API ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error("AI 返回空内容，请重试");
+      return content;
+    } catch (err) {
+      console.error("AI call failed:", err.message);
+      throw err;
     }
-    const res = await fetch(selected.url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${selected.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: selected.model,
-        messages,
-        temperature: 0.8,
-        max_tokens: maxTokens,
-      }),
-    });
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || "";
+  }
+
+  function safeJsonParse(text, fallback) {
+    try { return JSON.parse(text.replace(/```json\s*|```/g, "").trim()); }
+    catch { return fallback; }
   }
 
   const buildContext = () => {
@@ -70,6 +75,7 @@ export async function POST(req) {
       .trim();
   }
 
+  try {
   // 1. 生成开篇点子（带吸睛亮点说明）
   if (mode === "opening") {
     const ctx = buildContext();
@@ -711,5 +717,9 @@ ${textToAnalyze.slice(0, 12000)}`;
     }
   }
 
-  return Response.json({ error: "Unknown mode" }, { status: 400 });
+  return Response.json({ error: `未知模式: ${mode}` }, { status: 400 });
+} catch (err) {
+  console.error("API route error:", err.message);
+  return Response.json({ error: `AI 调用失败：${err.message}。请检查 API 密钥是否正确配置，或稍后重试。` }, { status: 500 });
+}
 }
