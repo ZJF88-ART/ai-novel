@@ -93,8 +93,8 @@ export async function POST(req) {
     const continueHint = previousIdeas.length > 0 ? `\n已有开篇：${previousIdeas.map(i => i.idea || i).join("|")}。生成与已有不同的新开篇。` : "";
 
     const prompt = `生成${count}个炸裂有记忆点的开篇点子，每个输出格式为：
-点子：[开篇梗概30字内]
-亮点：[为什么这个开篇能抓住读者，15字内]
+方向：[开篇梗概30字内]
+看点：[为什么这个开篇能抓住读者，15字内]
 不要编号，不要其他文字。${tagsHint}${spHint}${continueHint}\n${ctx}`;
 
     const result = await callAI([
@@ -106,10 +106,10 @@ export async function POST(req) {
     const ideas = [];
     let current = {};
     for (const line of lines) {
-      if (line.startsWith("点子：") || line.startsWith("点子:")) {
+      if (line.startsWith("方向：") || line.startsWith("点子:")) {
         if (current.idea) ideas.push(current);
         current = { idea: line.replace(/^点子[：:]\s*/, "").trim() };
-      } else if (line.startsWith("亮点：") || line.startsWith("亮点:")) {
+      } else if (line.startsWith("看点：") || line.startsWith("亮点:")) {
         current.highlight = line.replace(/^亮点[：:]\s*/, "").trim();
       }
     }
@@ -191,30 +191,26 @@ ${enemies?.length ? "对手：" + enemies.map(e => `${e.name}(${e.relation})`).j
 【本章】标题《${chapter.title}》，钩子：${chapter.hook}
 【上章摘要】${previousSummary}
 
-【角色锁定——严禁改变以下设定】
-- 林夜：能力必须是"雷劫淬体/赤雷"，不能变成其他能力。性格"沉稳"(不是冲动暴躁)。弱点"心魔缠身"。
-- 苏婉清：能力必须是"治愈圣光/雷灵封印"，不能变成战斗型角色。性格"温柔"。弱点"信任过度"。
-- 顾青云：能力必须是"剑意化形"(用剑/剑气，不能用机械义肢、炮管、枪械)。性格"腹黑"(表面礼貌内心算计)。弱点"道心不稳"。
-- 绝对不要把角色写出完全不同的装备或能力！如果前文提到某角色用剑，后面不能改成用炮。
+【角色约束——请严格遵循，但以下面自然的方式融入写作，不要生硬说明】
+- 林夜：能力“雷劫淬体/赤雷”，性格内敛不张扬（不是懦弱），心魔是他内心真正的对手
+- 苏婉清：能力“治愈圣光/雷灵封印”，温柔但有主见，信任别人但不傻
+- 顾青云：能力“剑意化形”（剑气、剑招，绝对不要写成机械义肢、炮管、枪械），表面彬彬有礼实际步步为营
 
 【写作要求】
-1. 自然承接上章结尾，不要突兀跳转
-2. 必须有1-2个意外事件或转折，不要让读者猜到下一步
-3. 情绪要有起伏——紧张→舒缓→再紧张，像过山车
-4. 结尾留一句强烈悬念（但不要写"欲知后事如何"之类的套话）
-5. 对话要有生活感，不要像翻译腔
-6. 描写要有细节，五感并用（看到什么、听到什么、闻到什么）
-7. 禁止使用以下AI套话："在这个充满...的世界里"、"然而"、"与此同时"、"不仅如此"、"总而言之"、"随着...的发展"
-8. 不要刻意解释设定，让读者从情节中自然理解
-9. 主角要有主观能动性，不被动挨打
-10. 每500字左右至少有一个爽点或亮点
-${feedback ? `\n【用户修改意见】${feedback}\n请务必按照此意见调整本章内容。` : ""}
-${continuationHook ? `\n【续写方向】${continuationHook}\n请严格围绕此方向展开本章，确保情节连贯。` : ""}
-
+- 从上章结尾自然开始，像翻书翻到下一页
+- 情节发展由角色的选择和性格推动，不要让“剧情需要”凌驾于角色之上
+- 结尾停在角色面临选择的时刻，而不是刻意制造悬念
+- 对话要贴合角色：林夜话少但到位，苏婉清直接不绕弯，顾青云话里有话
+- 描写具体的东西：物品的质感、光线的方向、声音的远近——而不是抽象的感受
+- 禁止使用的AI套路词和句式：
+  “空气中弥漫着” “他的眼中闪过” “嘴角勾起一抹” “就在这时” “突然”后面紧跟“然而”
+  “在XX的世界里” “随着XX的发展” “不仅仅” “仿佛在说” “似乎”
+- 不要解释角色动机。让读者通过角色的行为自己理解
+- 每段必须有推进：要么推进剧情，要么揭示角色，要么改变关系。不写“过渡段落”
 字数：${targetLength}。输出正文后另起一行"【本章摘要】："加100字内摘要。`;
 
     const result = await callAI([
-      { role: "system", content: `你是${style}类型的专业网文作家，文风独特有辨识度。你写的人物有血有肉，对话自然生动，情节跌宕起伏。你从不使用AI套话，每个段落都有存在的理由。` },
+      { role: "system", content: `你是一个写小说的。你不是AI，你是一个有自己文风的人。你写的人物会说人话，情节推动靠角色自己的选择，不是靠作者安排。你讨厌套路。` },
       { role: "user", content: prompt },
     ], economyMode ? 1200 : 1800);
 
@@ -671,7 +667,7 @@ ${hotBookCtx}${satCtx}${genreCtx}
     const chapterIndex = body.chapterIndex || 1;
     const chapterTitle = body.chapterTitle || `第${chapterIndex + 1}章`;
     const previousSummary = body.previousSummary || "";
-    const prompt = `设定：${ctx}\n当前进度：即将写${chapterTitle}。上一章摘要：${previousSummary || "无（这是第一章）"}\n请生成5个${chapterTitle}的续写点子，每个格式为：点子：[续写方向30字内] 亮点：[为什么这个方向精彩，15字内]。不要编号，不要其他文字。点子要有悬念感和冲击力。`;
+    const prompt = `设定：${ctx}\n当前进度：即将写${chapterTitle}。上一章摘要：${previousSummary || "无（这是第一章）"}\n请生成5个${chapterTitle}的续写点子，每个格式为：方向：[续写方向30字内] 看点：[为什么这个方向精彩，15字内]。不要编号，不要其他文字。点子要有悬念感和冲击力。`;
     const result = await callAI([
       { role: "system", content: "你是脑洞续写设计师，每个续写方向独特有记忆点，附带清晰的吸睛理由。" },
       { role: "user", content: prompt },
@@ -680,10 +676,10 @@ ${hotBookCtx}${satCtx}${genreCtx}
     const ideas = [];
     let current = {};
     for (const line of lines) {
-      if (line.startsWith("点子：") || line.startsWith("点子:")) {
+      if (line.startsWith("方向：") || line.startsWith("点子:")) {
         if (current.idea) ideas.push(current);
         current = { idea: line.replace(/^点子[：:]\s*/, "").trim() };
-      } else if (line.startsWith("亮点：") || line.startsWith("亮点:")) {
+      } else if (line.startsWith("看点：") || line.startsWith("亮点:")) {
         current.highlight = line.replace(/^亮点[：:]\s*/, "").trim();
       }
     }
