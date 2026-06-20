@@ -1,12 +1,43 @@
 {
-  "name": "ai-novel",
-  "version": "0.1.0",
+  "name": "ai-novel-studio",
+  "version": "1.0.0",
   "private": true,
+  "description": "AI Novel Studio - AI辅助网文创作工具",
+  "author": "AI Novel Studio",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "desktop:dev": "set NODE_ENV=development&& concurrently \"next dev -H 0.0.0.0\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:build": "next build && electron-builder --win portable",
+    "desktop:dist": "next build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.ainovel.studio",
+    "productName": "AI Novel Studio",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      ".next/**/*",
+      "public/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": ".env.local", "to": ".env.local" }
+    ],
+    "win": {
+      "target": ["portable", "nsis"],
+      "icon": "public/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "next": "16.2.6",
@@ -16,9 +47,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "autoprefixer": "^10.5.0",
+    "concurrently": "^9.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "postcss": "^8.5.15",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "wait-on": "^8.0.0"
   }
 }
