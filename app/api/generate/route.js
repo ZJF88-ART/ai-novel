@@ -1,23 +1,24 @@
 export async function GET() {
-  // 健康检查
-  const keys = {
-    DEEPSEEK: !!process.env.DEEPSEEK_API_KEY,
-    ZHIPU: !!process.env.ZHIPU_API_KEY,
-    AGNES: !!process.env.AGNES_API_KEY,
-  };
-  return Response.json({ status: "ok", providers: keys, hint: keys.DEEPSEEK ? "DeepSeek ready" : keys.AGNES ? "Agnes ready" : "No API key configured. Add DEEPSEEK_API_KEY or AGNES_API_KEY to Vercel environment variables." });
+  return Response.json({ status: "ok" });
 }
 
+// IP限速: 每分钟30次
+const rateMap = new Map();
+function checkRate(ip) { const n=Date.now(); const e=rateMap.get(ip); if(e&&n-e.t<60000){if(e.c>=30)return false;e.c++}else{rateMap.set(ip,{t:n,c:1})}; if(rateMap.size>5000){for(const[k,v]of rateMap){if(n-v.t>120000)rateMap.delete(k)}} return true }
+
 export async function POST(req) {
+  const clientIp = req.headers.get("x-forwarded-for") || "unknown";
+  if(!checkRate(clientIp)) return Response.json({error:"请求太频繁，每分钟30次限制"},{status:429});
+
   let body;
   try { body = await req.json(); } catch { return Response.json({ error: "请求格式错误，请检查 JSON 格式" }, { status: 400 }); }
-  const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook, apiKey } = body;
+  const { mode, worldType, worldBackground, protagonist, allies, enemies, style, openingHook, outline, chapterIndex, previousChapterSummary, economyMode, provider, novelLength, continuationHook} = body;
 
   // AI 平台配置
   const PROVIDERS = {
-    deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: apiKey || process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
-    zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: apiKey || process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
-    agnes: { url: "https://apihub.agnes-ai.com/v1/chat/completions", key: apiKey || process.env.AGNES_API_KEY, model: "agnes-2.0-flash" },
+    deepseek: { url: "https://api.deepseek.com/v1/chat/completions", key: process.env.DEEPSEEK_API_KEY, model: "deepseek-chat" },
+    zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/chat/completions", key: process.env.ZHIPU_API_KEY, model: "glm-4-flash" },
+    agnes: { url: "https://apihub.agnes-ai.com/v1/chat/completions", key: process.env.AGNES_API_KEY, model: "agnes-2.0-flash" },
   };
 
   const selected = PROVIDERS[provider] || PROVIDERS.deepseek;
@@ -30,13 +31,15 @@ export async function POST(req) {
     let maxTokens = defaultMax;
     if (economyMode) maxTokens = Math.floor(defaultMax * 0.6);
     try {
-      const res = await fetch(selected.url, {
+      const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),45000);
+      const res = await fetch(selected.url, {signal:ctrl.signal,
         method: "POST",
         headers: { "Authorization": `Bearer ${selected.key}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: selected.model, messages, temperature: 0.8, max_tokens: maxTokens }),
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => "Unknown");
+        clearTimeout(to);
         throw new Error(`API ${res.status}: ${errText.slice(0, 200)}`);
       }
       const data = await res.json();

@@ -253,7 +253,7 @@ export default function Home() {
     try {
       if (!canGenerate()) { alert(T("limitReached")); return; }
       const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: openingIdeas.map(i => typeof i === "string" ? i : i.idea) });
-      if (data?.ideas) { setOpeningIdeas([...openingIdeas, ...data.ideas]); incrementUsage(); setUsage(getUsageData()); }
+      if (data?.ideas) { setOpeningIdeas([...openingIdeas, ...data.ideas]); setUsage(getUsageData()); }
     } catch (err) { alert("生成更多失败: " + err.message); }
     finally { setRefinedLoading(false); }
   };
@@ -264,7 +264,7 @@ export default function Home() {
       if (!canGenerate()) { alert(T("limitReached")); return; }
       const ideaText = typeof openingIdeas[index] === "string" ? openingIdeas[index] : openingIdeas[index].idea;
       const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: [{ idea: ideaText }], count: 3 });
-      if (data?.ideas?.length > 0) { const ni = [...openingIdeas]; ni[index] = { ...ni[index], refined: data.ideas }; setOpeningIdeas(ni); incrementUsage(); setUsage(getUsageData()); }
+      if (data?.ideas?.length > 0) { const ni = [...openingIdeas]; ni[index] = { ...ni[index], refined: data.ideas }; setOpeningIdeas(ni); setUsage(getUsageData()); }
     } catch (err) { alert("优化失败: " + err.message); }
     finally { setRefinedLoading(false); setRefiningIndex(null); }
   };
@@ -337,7 +337,7 @@ export default function Home() {
       if (!canGenerate()) { alert(T("limitReached")); setContinuationLoading(false); return; }
       const prevSummary = idx > 0 ? (outline[idx - 1]?.summary || "") : "";
       const chapterTitle = outline[idx]?.title || `${lang === "en" ? "Ch " : "第"}${idx + 1}${lang === "en" ? "" : "章"}`;
-      const data = await apiFetch({ mode: "continuation", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, chapterIndex: idx, chapterTitle, previousSummary: prevSummary, novelLength }); if (data?.ideas) { setContinuationIdeas(data.ideas); incrementUsage(); setUsage(getUsageData()); }
+      const data = await apiFetch({ mode: "continuation", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, chapterIndex: idx, chapterTitle, previousSummary: prevSummary, novelLength }); if (data?.ideas) { setContinuationIdeas(data.ideas); setUsage(getUsageData()); }
     } catch (err) {}
     finally { setContinuationLoading(false); }
   };
