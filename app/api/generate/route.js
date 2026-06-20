@@ -753,6 +753,102 @@ ${textToAnalyze.slice(0, 12000)}`;
     }
   }
 
+  
+  // 15. 自主写作引擎：自动生成+审核+修正+循环
+  if (mode === "auto_write") {
+    const startChapter = chapterIndex || 0;
+    const maxChapters = body.maxAutoChapters || 5;
+    const results = [];
+    let currentIndex = startChapter;
+    let currentPrevSummary = previousChapterSummary || "";
+
+    for (let i = 0; i < maxChapters; i++) {
+      // 1. 生成章节
+      const chapterPrompt = `章节：第${currentIndex+1}章。上章摘要：${currentPrevSummary}。续写方向：${continuationHook}。风格：${style}`
+      let chapterResult;
+      try {
+        chapterResult = await callAI([
+          { role: "system", content: body.systemPrompt || "你是一个写小说的。你不是AI，你是一个有自己文风的人。" },
+          { role: "user", content: chapterPrompt },
+        ], 1800);
+      } catch (err) { break; }
+
+      const summaryMatch = chapterResult.match(/【本章摘要】：([sS]*)/);
+      let chapSummary = summaryMatch ? summaryMatch[1].trim() : "";
+      let chapContent = chapterResult.replace(/【本章摘要】：[sS]*/, "").trim();
+
+      // 2. 兜底摘要
+      if (!chapSummary && chapContent.length > 50) {
+        chapSummary = chapContent.replace(/\\n/g, "").slice(-100).trim();
+      }
+
+      // 3. 自动审核
+      let auditIssues = [];
+      try {
+        const auditResult = await callAI([
+          { role: "system", content: "审核小说章节角色一致性，输出JSON: {overallScore,issues:[{severity,character,problem,fix}]}" },
+          { role: "user", content: chapContent.slice(0, 2000) },
+        ], 400);
+        const parsed = JSON.parse(auditResult.replace(/`json|`/g, "").trim());
+        auditIssues = parsed.issues || [];
+      } catch {}
+
+      // 4. 如果有严重问题，自动修正
+      let fixed = false;
+      if (auditIssues.filter(iss => iss.severity === "严重").length > 0) {
+        try {
+          const fixPrompt = `章节：第${currentIndex+1}章。上章摘要：${currentPrevSummary}`
+          const fixResult = await callAI([
+            { role: "system", content: "你是一个写小说的。重写这一章，修正所有问题。" },
+            { role: "user", content: fixPrompt },
+          ], 1800);
+          const fixSummaryMatch = fixResult.match(/【本章摘要】：([sS]*)/);
+          chapContent = fixResult.replace(/【本章摘要】：[sS]*/, "").trim();
+          if (fixSummaryMatch) chapSummary = fixSummaryMatch[1].trim();
+          fixed = true;
+        } catch {}
+      }
+
+      // 5. 保存结果
+      currentPrevSummary = chapSummary || currentPrevSummary;
+      results.push({ chapterIndex: currentIndex, content: chapContent, summary: chapSummary, fixed, auditIssues });
+      currentIndex++;
+    }
+
+    return Response.json({ chapters: results, totalGenerated: results.length, nextChapterIndex: currentIndex });
+  }
+
+  
+  
+  // ===== 角色圣经 =====
+  if (mode === "character_bible") {
+    const allContent = body.chapterContents || [];
+    const existing = body.existingBible || {};
+    const prompt = "你是角色档案员。根据以下小说章节，为每个角色建立档案。JSON格式：{ characters: { 角色名: { personalitySnapshot, signatureLine, habits, secrets, relationships, recentChange, readerImpression } }, deathFlags, chemistryPairs }。章节：" + allContent.join("\n---\n") + " 现有：" + JSON.stringify(existing);
+    const result = await callAI([{role:"system",content:"你是角色档案员。输出严格JSON。"},{role:"user",content:prompt}],2000);
+    try { return Response.json(JSON.parse(result.replace(/`json|`/g,"").trim())); }
+    catch { return Response.json({characters:{},deathFlags:[],chemistryPairs:[]}); }
+  }
+
+  // ===== 节奏分析 =====
+  if (mode === "rhythm_analysis") {
+    const contents = body.chapterContents || [];
+    const prompt = "你是节奏分析师。分析以下章节。JSON：{ chapters:[{chapter,tension,type,oneLine,readerFeeling}], curve, problem, suggestion, fatigueIndex, nextChapterType }。内容：" + contents.map((t,i)=>"第"+(i+1)+"章："+t.substring(0,300)).join("\n");
+    const result = await callAI([{role:"system",content:"你是节奏分析师。输出严格JSON。"},{role:"user",content:prompt}],1200);
+    try { return Response.json(JSON.parse(result.replace(/`json|`/g,"").trim())); }
+    catch { return Response.json({chapters:[],curve:"unknown",suggestion:"无法分析"}); }
+  }
+
+  // ===== 惊喜连接 =====
+  if (mode === "plot_connect") {
+    const threads = body.plotThreads || [];
+    const chars = body.characterInfo || {};
+    const prompt = "你是小说结构师。发现伏笔之间的隐藏关联。JSON：{ connections:[{threadA,threadB,connection,surpriseLevel,mergeIdea,impactOnCharacters}], orphanThreads, masterKey, newDirection }。伏笔：" + JSON.stringify(threads) + " 角色：" + JSON.stringify(chars);
+    const result = await callAI([{role:"system",content:"你是小说结构师。输出严格JSON。"},{role:"user",content:prompt}],1500);
+    try { return Response.json(JSON.parse(result.replace(/`json|`/g,"").trim())); }
+    catch { return Response.json({connections:[],masterKey:"分析失败"}); }
+  }
+
   return Response.json({ error: `未知模式: ${mode}` }, { status: 400 });
 } catch (err) {
   console.error("API route error:", err.message);

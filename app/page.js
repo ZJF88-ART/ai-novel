@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { t, L } from "./lib/i18n";
 import CollapsibleCard from "./components/CollapsibleCard";
+import CharacterBible from "./components/CharacterBible";
+import RhythmDashboard from "./components/RhythmDashboard";
+import SurpriseConnect from "./components/SurpriseConnect";
 import { WORLD_TYPES, PERSONALITIES, STYLES, ABILITIES, WEAKNESSES, MALE_NAMES, FEMALE_NAMES, ALLY_RELATIONS, ENEMY_RELATIONS, NOVEL_LENGTHS, PROVIDER_OPTIONS, pick, randomCharacter, randomAlly, randomEnemy } from "./lib/presets";
 
 /* ===== 免费额度管理 ===== */
@@ -661,6 +664,12 @@ export default function Home() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 min-h-[300px]">
           {chapterContent ? <div className="whitespace-pre-wrap leading-8 text-[15px] text-gray-800">{chapterContent}</div> : <div className="text-gray-300 text-center mt-24 text-sm">{outline.length ? (currentChapterIndex === 0 ? T("welcomeMsg1") : T("welcomeMsg2")) : T("welcomeMsg3")}</div>}
         </div>
+
+        {/* 🔮 爆款神器三板斧 */}
+        <CharacterBible lang={lang} t={T} apiFetch={apiFetch} outline={outline} />
+        <RhythmDashboard lang={lang} t={T} apiFetch={apiFetch} outline={outline} />
+        <SurpriseConnect lang={lang} t={T} apiFetch={apiFetch} trackerData={trackerData} protagonist={protagonist} allies={allies} enemies={enemies} />
+
       </main>
     </div>
   );
