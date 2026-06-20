@@ -595,7 +595,13 @@ hotBooks 至少8本，satisfactionPoints 至少8种，trendingWorldTypes 至少6
 }
 
 角色设定：${JSON.stringify(characters)}
-章节内容：${chapterContent.slice(0, 3000)}`;
+章节内容：${chapterContent.slice(0, 3000)}
+
+【特别要求】重点检查以下一致性：
+1. 装备/武器是否与角色设定一致（例：顾青云设定用剑，文中不能用炮管或义肢）
+2. 能力/天赋是否被替换为不相关的能力（例：雷劫淬体不能变成火系能力）
+3. 性格表现是否与设定矛盾（例：沉稳角色不应有冲动暴躁行为）
+4. 角色间关系是否与设定一致`;
 
     const result = await callAI([
       { role: "system", content: "你是小说编辑，严格审核角色一致性。输出严格JSON。" },
