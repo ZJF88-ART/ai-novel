@@ -33,6 +33,68 @@ function incrementUsage() {
   d.count++;
   localStorage.setItem("daily-usage", JSON.stringify(d));
 }
+/* ===== 保存辅助 ===== */
+function buildSaveData(state) {
+  return {
+    worldType: state.worldType, worldBackground: state.worldBackground,
+    protagonist: state.protagonist, allies: state.allies, enemies: state.enemies,
+    style: state.style, customStyle: state.customStyle,
+    economyMode: state.economyMode, provider: state.provider, customApiKey: state.customApiKey,
+    novelLength: state.novelLength, trackerData: state.trackerData,
+    outline: state.outline, currentChapterIndex: state.currentChapterIndex,
+    chapterContent: state.chapterContent, btnPos: state.btnPos, lang: state.lang,
+    continuationIdeas: state.continuationIdeas, selectedContinuation: state.selectedContinuation,
+  };
+}
+
+function getProjectList() {
+  try { return JSON.parse(localStorage.getItem("ai-novel-projects") || "[]"); } catch { return []; }
+}
+function saveProjectList(list) {
+  localStorage.setItem("ai-novel-projects", JSON.stringify(list));
+}
+
+function saveCurrentProject(id, data) {
+  if (!id) return;
+  localStorage.setItem("ai-novel-proj-" + id, JSON.stringify(data));
+  const list = getProjectList();
+  const idx = list.findIndex(p => p.id === id);
+  const now = Date.now();
+  if (idx >= 0) {
+    list[idx].updatedAt = now;
+  } else {
+    list.push({ id, name: data.worldBackground?.slice(0, 20) || data.worldType || "新项目", updatedAt: now });
+  }
+  saveProjectList(list);
+}
+
+function loadProjectData(id) {
+  try { return JSON.parse(localStorage.getItem("ai-novel-proj-" + id)); } catch { return null; }
+}
+
+function deleteProjectData(id) {
+  localStorage.removeItem("ai-novel-proj-" + id);
+  const list = getProjectList().filter(p => p.id !== id);
+  saveProjectList(list);
+}
+
+function migrateOldSave() {
+  const old = localStorage.getItem("ai-novel-autosave");
+  if (old) {
+    try {
+      const data = JSON.parse(old);
+      const id = "proj-" + Date.now();
+      localStorage.setItem("ai-novel-proj-" + id, old);
+      const list = getProjectList();
+      list.push({ id, name: data.worldBackground?.slice(0, 20) || data.worldType || "导入的项目", updatedAt: Date.now() });
+      saveProjectList(list);
+      localStorage.removeItem("ai-novel-autosave");
+      return id;
+    } catch { return null; }
+  }
+  return null;
+}
+
 
 /* ===== 组件 ===== */
 
@@ -50,6 +112,17 @@ function SmartField({ value, onChange, presets, placeholder }) {
     </div>
   );
 }
+
+function computeOutlineGroups(outline) {
+  const groups = [];
+  const GROUP_SIZE = 5;
+  for (let i = 0; i < outline.length; i += GROUP_SIZE) {
+    const end = Math.min(i + GROUP_SIZE, outline.length);
+    groups.push({ chapters: outline.slice(i, end), start: i, end: end - 1 });
+  }
+  return groups;
+}
+
 
 function OutlineGroups({ outline, currentChapterIndex, onSelect, openGroups, toggleGroup, lang }) {
   const groups = computeOutlineGroups(outline);
@@ -103,16 +176,13 @@ export default function Home() {
   const [customApiKey, setCustomApiKey] = useState("");
   const [novelLength, setNovelLength] = useState("long");
 
-  const [openingIdeas, setOpeningIdeas] = useState([]);
-  const [selectedOpening, setSelectedOpening] = useState("");
   const [outline, setOutline] = useState([]);
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const [chapterContent, setChapterContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [projectList, setProjectList] = useState([]);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [refinedLoading, setRefinedLoading] = useState(false);
-  const [refiningIndex, setRefiningIndex] = useState(null);
-  const [applyFrameworkLoading, setApplyFrameworkLoading] = useState(false);
 
   const [continuationIdeas, setContinuationIdeas] = useState([]);
   const [continuationLoading, setContinuationLoading] = useState(false);
@@ -140,6 +210,8 @@ export default function Home() {
   const hasMoved = useRef(false);
 
   const [usage, setUsage] = useState(getUsageData());
+  const [savedMsg, setSavedMsg] = useState("");
+  const textareaRef = useRef(null);
 
   /* ===== 拖拽 ===== */
   useEffect(() => {
@@ -156,17 +228,30 @@ export default function Home() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onUp); };
   }, [isDragging]);
 
-  /* ===== 自动保存 ===== */
+    /* ===== 自动保存 ===== */
   useEffect(() => {
-    const data = { worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang };
-    localStorage.setItem("ai-novel-autosave", JSON.stringify(data));
-  }, [worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, btnPos, lang]);
+    if (!currentProjectId) return;
+    let o = [...outline];
+    if (chapterContent && o[currentChapterIndex]) {
+      o[currentChapterIndex] = { ...o[currentChapterIndex], content: chapterContent };
+    }
+    const data = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline: o, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation });
+    saveCurrentProject(currentProjectId, data);
+    setProjectList(getProjectList());
+  }, [currentProjectId, worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("ai-novel-autosave");
-      if (!raw) return;
-      const d = JSON.parse(raw);
+      // Try migrate old save first
+      const migratedId = migrateOldSave();
+      const list = getProjectList();
+      setProjectList(list);
+      // Pick most recent project
+      const targetId = migratedId || (list.length > 0 ? list.sort((a,b) => b.updatedAt - a.updatedAt)[0].id : null);
+      if (!targetId) return;
+      setCurrentProjectId(targetId);
+      const d = loadProjectData(targetId);
+      if (!d) return;
       if (d.worldType) setWorldType(d.worldType);
       if (d.worldBackground) setWorldBackground(d.worldBackground);
       if (d.protagonist) setProtagonist(d.protagonist);
@@ -179,20 +264,38 @@ export default function Home() {
       if (d.customApiKey) setCustomApiKey(d.customApiKey);
       if (d.novelLength) setNovelLength(d.novelLength);
       if (d.trackerData) setTrackerData(d.trackerData);
-      if (d.openingIdeas) setOpeningIdeas(d.openingIdeas);
-      if (d.selectedOpening) setSelectedOpening(d.selectedOpening);
       if (d.outline) setOutline(d.outline);
       if (d.currentChapterIndex !== undefined) setCurrentChapterIndex(d.currentChapterIndex);
       if (d.chapterContent) setChapterContent(d.chapterContent);
       if (d.btnPos) setBtnPos(d.btnPos);
       if (d.lang) setLang(d.lang);
+      if (d.continuationIdeas) setContinuationIdeas(d.continuationIdeas);
+      if (d.selectedContinuation) setSelectedContinuation(d.selectedContinuation);
     } catch {}
   }, []);
 
   const exportProject = () => {
-    const data = { worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, novelLength, trackerData, openingIdeas, selectedOpening, outline, currentChapterIndex, chapterContent, lang };
+    const data = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `novel_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const [exportWordLoading, setExportWordLoading] = useState(false);
+  const exportWord = async () => {
+    setExportWordLoading(true);
+    try {
+      const chapters = [];
+      if (chapterContent) chapters.push({ title: outline[currentChapterIndex]?.title || "Current", content: chapterContent });
+      for (const [idx, ct] of Object.entries(generatedChapters || {})) chapters.push({ title: outline[idx]?.title || ("Ch" + (parseInt(idx)+1)), content: ct });
+      if (!chapters.length) { alert("No chapters to export"); return; }
+      const res = await fetch("/api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chapters, title: "AI Novel Studio" }) });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "novel_" + chapters.length + "ch.docx"; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { alert("Export Word: " + err.message); }
+    finally { setExportWordLoading(false); }
   };
 
   const importProject = (e) => {
@@ -212,9 +315,7 @@ export default function Home() {
         if (d.provider) setProvider(d.provider);
         if (d.novelLength) setNovelLength(d.novelLength);
         if (d.trackerData) setTrackerData(d.trackerData);
-        if (d.openingIdeas) setOpeningIdeas(d.openingIdeas);
-        if (d.selectedOpening) setSelectedOpening(d.selectedOpening);
-        if (d.outline) setOutline(d.outline);
+            if (d.outline) setOutline(d.outline);
         if (d.currentChapterIndex !== undefined) setCurrentChapterIndex(d.currentChapterIndex);
         if (d.chapterContent) setChapterContent(d.chapterContent);
         if (d.lang) setLang(d.lang);
@@ -246,41 +347,10 @@ export default function Home() {
     return data;
   };
 
-  const generateOpening = async () => {
-    const data = await callAPI({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider });
-    if (data?.ideas) setOpeningIdeas(data.ideas);
-  };
 
-  const generateMoreOpenings = async () => {
-    setRefinedLoading(true);
-    try {
-      if (!canGenerate()) { alert(T("limitReached")); return; }
-      const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: openingIdeas.map(i => typeof i === "string" ? i : i.idea) });
-      if (data?.ideas) { setOpeningIdeas([...openingIdeas, ...data.ideas]); setUsage(getUsageData()); }
-    } catch (err) { alert("生成更多失败: " + err.message); }
-    finally { setRefinedLoading(false); }
-  };
 
-  const refineOpeningIdea = async (index) => {
-    setRefiningIndex(index); setRefinedLoading(true);
-    try {
-      if (!canGenerate()) { alert(T("limitReached")); return; }
-      const ideaText = typeof openingIdeas[index] === "string" ? openingIdeas[index] : openingIdeas[index].idea;
-      const data = await apiFetch({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider, previousIdeas: [{ idea: ideaText }], count: 3 });
-      if (data?.ideas?.length > 0) { const ni = [...openingIdeas]; ni[index] = { ...ni[index], refined: data.ideas }; setOpeningIdeas(ni); setUsage(getUsageData()); }
-    } catch (err) { alert("优化失败: " + err.message); }
-    finally { setRefinedLoading(false); setRefiningIndex(null); }
-  };
 
-  const acceptRefinedIdea = (pi, ri) => { const ni = [...openingIdeas]; const r = ni[pi].refined[ri]; ni[pi] = { idea: r.idea || r, highlight: r.highlight || "" }; setOpeningIdeas(ni); };
-  const updateOpeningIdea = (index, nt) => { const ni = [...openingIdeas]; ni[index] = { ...ni[index], idea: nt }; setOpeningIdeas(ni); };
 
-  const applyFramework = async () => {
-    setApplyFrameworkLoading(true); setOpeningIdeas([]); setSelectedOpening(""); setOutline([]); setCurrentChapterIndex(0); setChapterContent(""); setContinuationIdeas([]); setSelectedContinuation(""); setAuditData(null);
-    try { const data = await callAPI({ mode: "opening", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, economyMode, provider }); if (data?.ideas) setOpeningIdeas(data.ideas); }
-    catch (err) { alert("应用框架失败: " + err.message); }
-    finally { setApplyFrameworkLoading(false); }
-  };
 
   const handleFileUploadForImport = (e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => setImportNovelText(ev.target.result); r.readAsText(f); };
 
@@ -316,20 +386,20 @@ export default function Home() {
     alert(T("frameworkApplied") + "\n\n" + (a.plotSummary || "").slice(0, 80) + "...");
   };
 
-  const generateOutline = async () => { if (!selectedOpening) { alert(T("noOpening")); return; } const data = await callAPI({ mode: "outline", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, openingHook: selectedOpening, economyMode, provider, novelLength }); if (data?.outline) { setOutline(data.outline); setCurrentChapterIndex(0); setChapterContent(""); setOutlineOpenGroups({}); } };
+  const generateOutline = async () => { setLoading(true); try { if (!canGenerate()) { alert(T("limitReached")); setLoading(false); return; } const data = await callAPI({ mode: "outline", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, openingHook: "", economyMode, provider, novelLength }); if (data?.outline) { setOutline(data.outline); setCurrentChapterIndex(0); setChapterContent(""); setOutlineOpenGroups({}); } } catch (err) { alert("生成大纲失败: " + err.message); } finally { setLoading(false); } }
 
   const generateChapter = async (idx) => {
     let o = [...outline]; while (idx >= o.length) o.push({ title: `${lang === "en" ? "Ch " : "第"}${o.length + 1}${lang === "en" ? "" : "章"}`, hook: lang === "en" ? "New chapter" : "新篇章开启", summary: "" });
     const prev = idx > 0 ? (o[idx - 1]?.summary || "") : "";
     const data = await callAPI({ mode: "chapter", worldType, worldBackground, protagonist, allies, enemies, style: customStyle || style, outline: o, chapterIndex: idx, previousChapterSummary: prev, economyMode, provider, continuationHook: selectedContinuation || "" });
-    if (data?.content) { setChapterContent(data.content); setCurrentChapterIndex(idx); o[idx] = { ...o[idx], summary: data.summary || "" }; setOutline(o); setContinuationIdeas([]); setSelectedContinuation(""); const sd = { worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, novelLength, openingIdeas, selectedOpening, outline: o, currentChapterIndex: idx, chapterContent: data.content }; localStorage.setItem("ai-novel-autosave", JSON.stringify(sd)); }
+    if (data?.content) { setChapterContent(data.content); setCurrentChapterIndex(idx); o[idx] = { ...o[idx], content: data.content, summary: data.summary || "" }; setOutline(o); setContinuationIdeas([]); setSelectedContinuation(""); const sd = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline: o, currentChapterIndex: idx, chapterContent: data.content, btnPos, lang, continuationIdeas, selectedContinuation }); saveCurrentProject(currentProjectId, sd); setProjectList(getProjectList()); }
   };
 
   const saveChapter = () => {
     if (!chapterContent) return; const o = [...outline];
     if (!o[currentChapterIndex]) o[currentChapterIndex] = { title: `${lang === "en" ? "Ch " : "第"}${currentChapterIndex + 1}${lang === "en" ? "" : "章"}`, hook: "", summary: "" };
     o[currentChapterIndex] = { ...o[currentChapterIndex], content: chapterContent, summary: o[currentChapterIndex].summary || chapterContent.slice(0, 80) }; setOutline(o);
-    localStorage.setItem("ai-novel-autosave", JSON.stringify({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, novelLength, openingIdeas, selectedOpening, outline: o, currentChapterIndex, chapterContent }));
+    const sd = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline: o, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation }); saveCurrentProject(currentProjectId, sd); setProjectList(getProjectList());
     alert(T("savedOk", currentChapterIndex + 1));
   };
 
@@ -345,7 +415,83 @@ export default function Home() {
     finally { setContinuationLoading(false); }
   };
 
-  const goToNextChapter = () => { const n = currentChapterIndex + 1; setCurrentChapterIndex(n); setChapterContent(""); setAuditData(null); fetchContinuationIdeas(n); };
+  
+  const createProject = () => {
+    const id = "proj-" + Date.now();
+    const name = lang === "en" ? "New Project" : "新项目";
+    const empty = buildSaveData({ worldType: "fantasy", worldBackground: "", protagonist: { name: "", personality: "", ability: "", weakness: "" }, allies: [], enemies: [], style: "热血战斗", customStyle: "", economyMode: false, provider: "deepseek", customApiKey: "", novelLength: "long", trackerData: null, outline: [], currentChapterIndex: 0, chapterContent: "", btnPos: { x: 16, y: 16 }, lang, continuationIdeas: [], selectedContinuation: "" });
+    saveCurrentProject(id, empty);
+    setCurrentProjectId(id);
+    setProjectList(getProjectList());
+    // Reset UI
+    setWorldType("fantasy"); setWorldBackground(""); setProtagonist({ name: "", personality: "", ability: "", weakness: "" });
+    setAllies([]); setEnemies([]); setStyle("热血战斗"); setCustomStyle(""); setProvider("deepseek"); setCustomApiKey("");
+    setNovelLength("long"); setOutline([]); setCurrentChapterIndex(0); setChapterContent("");
+    setContinuationIdeas([]); setSelectedContinuation(""); setTrackerData(null); setAuditData(null);
+  };
+
+  const switchProject = (id) => {
+    // Save current first
+    if (currentProjectId) {
+      const data = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation });
+      saveCurrentProject(currentProjectId, data);
+    }
+    // Load new
+    const d = loadProjectData(id);
+    if (!d) return;
+    setCurrentProjectId(id);
+    if (d.worldType) setWorldType(d.worldType);
+    if (d.worldBackground !== undefined) setWorldBackground(d.worldBackground);
+    if (d.protagonist) setProtagonist(d.protagonist);
+    if (d.allies) setAllies(d.allies);
+    if (d.enemies) setEnemies(d.enemies);
+    if (d.style) setStyle(d.style);
+    if (d.customStyle !== undefined) setCustomStyle(d.customStyle);
+    if (d.economyMode !== undefined) setEconomyMode(d.economyMode);
+    if (d.provider) setProvider(d.provider);
+    if (d.customApiKey !== undefined) setCustomApiKey(d.customApiKey);
+    if (d.novelLength) setNovelLength(d.novelLength);
+    if (d.trackerData) setTrackerData(d.trackerData); else setTrackerData(null);
+    setOutline(d.outline || []);
+    setCurrentChapterIndex(d.currentChapterIndex || 0);
+    setChapterContent(d.chapterContent || "");
+    if (d.btnPos) setBtnPos(d.btnPos);
+    if (d.lang) setLang(d.lang);
+    setContinuationIdeas(d.continuationIdeas || []);
+    setSelectedContinuation(d.selectedContinuation || "");
+    setAuditData(null);
+    setProjectList(getProjectList());
+  };
+
+  const deleteProject = (id) => {
+    if (!confirm(lang === "en" ? "Delete this project? This cannot be undone." : "确定删除这个项目？此操作不可撤销。")) return;
+    deleteProjectData(id);
+    const list = getProjectList();
+    setProjectList(list);
+    if (id === currentProjectId) {
+      if (list.length > 0) {
+        switchProject(list[list.length - 1].id);
+      } else {
+        createProject();
+      }
+    }
+  };
+
+    const updateOutlineChapter = (idx, field, value) => { const o = [...outline]; if (o[idx]) { o[idx] = { ...o[idx], [field]: value }; setOutline(o); } };
+
+    const autoSaveChapter = () => {
+    if (!chapterContent || !outline[currentChapterIndex]) return;
+    const o = [...outline];
+    o[currentChapterIndex] = { ...o[currentChapterIndex], content: chapterContent };
+    setOutline(o);
+    const data = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline: o, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation });
+    saveCurrentProject(currentProjectId, data);
+    setProjectList(getProjectList());
+    setSavedMsg(lang === "en" ? "✓ Auto-saved" : "✓ 已自动保存");
+    setTimeout(() => setSavedMsg(""), 2000);
+  };
+
+  const goToPrevChapter = () => { if (currentChapterIndex > 0) { autoSaveChapter(); const p = currentChapterIndex - 1; setCurrentChapterIndex(p); setChapterContent(outline[p]?.content || ""); setAuditData(null); setContinuationIdeas([]); } }; const goToNextChapter = () => { autoSaveChapter(); const n = currentChapterIndex + 1; setCurrentChapterIndex(n); setChapterContent(outline[n]?.content || ""); setAuditData(null); fetchContinuationIdeas(n); };
 
   const addAlly = () => setAllies([...allies, { name: "", personality: "", ability: "", weakness: "", relation: "朋友" }]);
   const addEnemy = () => setEnemies([...enemies, { name: "", personality: "", ability: "", weakness: "", relation: "敌人" }]);
@@ -364,7 +510,6 @@ export default function Home() {
   const chaptersWithContent = outline.filter((ch) => ch.summary).length;
   const shouldRefreshTracker = chaptersWithContent > 0 && chaptersWithContent % 3 === 0 && (!trackerData || trackerData._updatedChapter !== chaptersWithContent);
   const activeStyle = customStyle || style;
-  const showOpeningIdeas = openingIdeas.length > 0 && currentChapterIndex === 0 && !chapterContent;
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -388,14 +533,31 @@ export default function Home() {
           {/* 头部 + 语言切换 + 额度 */}
           <div className="flex items-center justify-between mb-1 px-1 flex-wrap gap-2">
             <h1 className="text-xl font-bold text-gray-900 tracking-tight">{T("title")}</h1>
+          {/* 项目管理 */}
+          <div className="flex items-center gap-1.5 w-full mt-1">
+            <select
+              value={currentProjectId || ""}
+              onChange={(e) => { if (e.target.value) switchProject(e.target.value); }}
+              className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:border-blue-400 outline-none transition-all text-gray-700"
+            >
+              {projectList.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name || (lang === "en" ? "Untitled" : "未命名")}
+                </option>
+              ))}
+              {projectList.length === 0 && <option value="">{lang === "en" ? "No projects" : "无项目"}</option>}
+            </select>
+            <button onClick={createProject} title={lang === "en" ? "New Project" : "新建项目"} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors text-sm font-bold">+</button>
+            {projectList.length > 1 && (
+              <button onClick={() => deleteProject(currentProjectId)} title={lang === "en" ? "Delete Project" : "删除项目"} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 text-red-500 hover:bg-red-200 transition-colors text-sm">🗑</button>
+            )}
+          </div>
             <div className="flex gap-1 items-center">
               <button onClick={() => setLang(lang === "zh" ? "en" : "zh")} className="text-xs px-2 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 transition-colors text-gray-600" title={T("langSwitch")}>
                 🌐 {T("langSwitch")}
               </button>
-              <button onClick={applyFramework} disabled={applyFrameworkLoading} className="text-xs px-2 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 transition-all font-medium" title={T("frameworkTooltip")}>
-                {applyFrameworkLoading ? "⏳" : T("applyFramework")}
-              </button>
               <button onClick={exportProject} className="text-xs px-2 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 transition-colors text-gray-600">{T("export")}</button>
+              <button onClick={exportWord} disabled={exportWordLoading} className="text-xs px-2 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-all font-medium">{exportWordLoading ? "..." : "Word"}</button>
               <label className="text-xs px-2 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 transition-colors text-gray-600 cursor-pointer">{T("import")}<input type="file" accept=".json" onChange={importProject} className="hidden" /></label>
             </div>
           </div>
@@ -531,9 +693,12 @@ export default function Home() {
             )}
           </CollapsibleCard>
 
-          <button onClick={generateOpening} disabled={loading || !canGenerate()} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold text-[15px] hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-200">
-            {loading ? T("generating") : T("generateOpening")}
+          <div className="space-y-2 pt-2 border-t border-gray-200">
+            <button onClick={() => { const data = buildSaveData({ worldType, worldBackground, protagonist, allies, enemies, style, customStyle, economyMode, provider, customApiKey, novelLength, trackerData, outline, currentChapterIndex, chapterContent, btnPos, lang, continuationIdeas, selectedContinuation }); saveCurrentProject(currentProjectId, data); setProjectList(getProjectList()); alert(lang === "en" ? "Settings saved!" : "设定已保存！已生成的章节可能需要重新生成以匹配新设定。"); }} className="w-full py-2.5 rounded-xl bg-white border-2 border-green-400 text-green-600 font-semibold text-sm hover:bg-green-50 transition-all">💾 {lang === "en" ? "Save Settings" : "保存设定"}</button>
+            <button onClick={generateOutline} disabled={loading || !canGenerate()} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-semibold text-[15px] hover:from-purple-700 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-purple-200">
+            {loading ? T("generating") : T("genOutline")}
           </button>
+          </div>
         </div>
       </aside>
 
@@ -609,22 +774,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* 开篇点子 */}
-        {showOpeningIdeas && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-bold text-gray-800">{T("openingIdeas")} ({openingIdeas.length})</h2><button onClick={generateMoreOpenings} disabled={refinedLoading || !canGenerate()} className="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 text-sm font-semibold hover:bg-indigo-200 disabled:opacity-50 transition-all">{refinedLoading ? T("generating") : T("genMore")}</button></div>
-            <div className="space-y-3">
-              {openingIdeas.map((item, i) => {
-                const ideaText = typeof item === "string" ? item : item.idea; const highlight = typeof item === "string" ? "" : item.highlight;
-                return (<div key={i} className={`rounded-xl border-2 p-4 transition-all ${selectedOpening === ideaText ? "border-blue-500 bg-blue-50 shadow-sm" : "border-gray-100 bg-gray-50"}`}><div className="flex items-start gap-3"><div className="flex-1"><textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all resize-none" rows={2} value={ideaText} onChange={(e) => updateOpeningIdea(i, e.target.value)} />{highlight && <p className="text-xs text-amber-600 mt-1">✨ {highlight}</p>}{item.refined?.length > 0 && <div className="mt-2 space-y-1.5 border-t border-gray-200 pt-2"><p className="text-xs text-gray-400 font-medium">{T("aiSuggest")}：</p>{item.refined.map((r, ri) => { const rText = typeof r === "string" ? r : r.idea; return (<div key={ri} className="flex items-start gap-2 bg-white rounded-lg p-2 border border-purple-100"><div className="flex-1"><p className="text-xs text-gray-700">{rText}</p></div><button onClick={() => acceptRefinedIdea(i, ri)} className="shrink-0 text-xs px-2 py-1 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors">{T("adopt")}</button></div>); })}</div>}</div><div className="flex flex-col gap-1.5 shrink-0"><button onClick={() => setSelectedOpening(ideaText)} className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${isSelected ? "bg-blue-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600"}`}>{isSelected ? T("selected") : T("select")}</button><button onClick={() => refineOpeningIdea(i)} disabled={refiningIndex === i || !canGenerate()} className="text-xs px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 transition-colors font-medium">{refiningIndex === i ? "⏳" : T("aiOptimize")}</button></div></div></div>);
-              })}
-            </div>
-            <button onClick={generateOutline} disabled={loading || !selectedOpening || !canGenerate()} className="mt-4 w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-semibold text-sm hover:from-purple-700 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm">{loading ? T("generating") : T("genOutline")}</button>
-          </div>
-        )}
-
-        {/* 续写点子 */}
-        {currentChapterIndex > 0 && !chapterContent && (
+        {/* 写作点子 */}
+        {!chapterContent && (
           <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200 p-5">
             <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-bold text-gray-800">{T("continuationIdeas")} — {lang === "en" ? "Ch " : "第"}{currentChapterIndex + 1}{lang === "en" ? "" : "章"}</h2><button onClick={() => fetchContinuationIdeas()} disabled={continuationLoading || !canGenerate()} className="px-4 py-2 rounded-xl bg-green-100 text-green-700 text-sm font-semibold hover:bg-green-200 disabled:opacity-50 transition-all">{continuationLoading ? T("generating") : T("genContinuation")}</button></div>
             {!continuationIdeas.length && !continuationLoading && <p className="text-sm text-gray-500 mb-3">{T("continuationHint")}</p>}
@@ -636,7 +787,7 @@ export default function Home() {
         {outline.length > 0 && (
           <div className="mb-6">
             <h2 className="text-lg font-bold text-gray-800 mb-3">{T("chapOutline")} ({outline.length} {lang === "en" ? "ch" : "章"} · {computeOutlineGroups(outline).length} {T("groups")})</h2>
-            <OutlineGroups outline={outline} currentChapterIndex={currentChapterIndex} onSelect={(idx) => { setCurrentChapterIndex(idx); setChapterContent(outline[idx]?.content || ""); setAuditData(null); setContinuationIdeas([]); }} openGroups={outlineOpenGroups} toggleGroup={(key) => setOutlineOpenGroups(prev => ({ ...prev, [key]: prev[key] === false ? true : false }))} lang={lang} />
+            <OutlineGroups outline={outline} currentChapterIndex={currentChapterIndex} onUpdateChapter={updateOutlineChapter} onSelect={(idx) => { if (currentChapterIndex !== idx) { autoSaveChapter(); } setCurrentChapterIndex(idx); setChapterContent(outline[idx]?.content || ""); setAuditData(null); setContinuationIdeas([]); }} openGroups={outlineOpenGroups} toggleGroup={(key) => setOutlineOpenGroups(prev => ({ ...prev, [key]: prev[key] === false ? true : false }))} lang={lang} />
             {outline[currentChapterIndex] && (
               <div className="bg-gray-50 rounded-xl p-4 my-4 space-y-2">
                 <div className="flex items-center gap-2">
@@ -652,8 +803,10 @@ export default function Home() {
             )}
             <div className="flex flex-wrap gap-3 mb-6">
               <button onClick={() => generateChapter(currentChapterIndex)} disabled={loading || !canGenerate()} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 text-white font-semibold text-sm hover:from-green-700 hover:to-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm">{loading ? T("generating") : currentChapterIndex === 0 ? T("writeChap1") : T("writeChap")}</button>
+              {chapterContent && <button onClick={() => generateChapter(currentChapterIndex)} disabled={loading || !canGenerate()} className="px-6 py-2.5 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 disabled:opacity-50 transition-all" title={lang === "en" ? "Regenerate with updated settings" : "用最新设定重新生成"}>{loading ? T("generating") : (lang === "en" ? "Regen" : "🔄 按新设定重写")}</button>}
               {chapterContent && currentChapterIndex > 0 && <button onClick={() => generateChapter(currentChapterIndex)} disabled={loading || !canGenerate()} className="px-6 py-2.5 rounded-xl bg-yellow-500 text-white font-semibold text-sm hover:bg-yellow-600 disabled:opacity-50 transition-all">{T("rewrite")}</button>}
               {chapterContent && <button onClick={saveChapter} className="px-6 py-2.5 rounded-xl bg-purple-500 text-white font-semibold text-sm hover:bg-purple-600 transition-all">{T("saveOutline")}</button>}
+              <button onClick={goToPrevChapter} disabled={currentChapterIndex === 0} className="px-6 py-2.5 rounded-xl bg-gray-500 text-white font-semibold text-sm hover:bg-gray-600 disabled:opacity-50 transition-all">{T("prevChapter")}</button>
               <button onClick={goToNextChapter} className="px-6 py-2.5 rounded-xl bg-blue-500 text-white font-semibold text-sm hover:bg-blue-600 transition-all">{T("nextChapter")}</button>
               <button onClick={() => generateChapter(currentChapterIndex + 1)} disabled={loading || !canGenerate()} className="px-6 py-2.5 rounded-xl bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-600 disabled:opacity-50 transition-all">{T("genNext")}</button>
             </div>
@@ -662,7 +815,7 @@ export default function Home() {
 
         {/* 正文 */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 min-h-[300px]">
-          {chapterContent ? <div className="whitespace-pre-wrap leading-8 text-[15px] text-gray-800">{chapterContent}</div> : <div className="text-gray-300 text-center mt-24 text-sm">{outline.length ? (currentChapterIndex === 0 ? T("welcomeMsg1") : T("welcomeMsg2")) : T("welcomeMsg3")}</div>}
+          {chapterContent ? <div className="relative"><textarea ref={textareaRef} className="w-full min-h-[300px] leading-8 text-[15px] text-gray-800 bg-transparent resize-y focus:outline-none focus:ring-2 focus:ring-blue-200 rounded-lg p-2" value={chapterContent} onChange={(e) => setChapterContent(e.target.value)} onBlur={autoSaveChapter} />{savedMsg && <span className="absolute bottom-3 right-3 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-lg animate-pulse">{savedMsg}</span>}</div> : <div className="text-gray-300 text-center mt-24 text-sm">{outline.length ? (currentChapterIndex === 0 ? T("welcomeMsg1") : T("welcomeMsg2")) : T("welcomeMsg3")}</div>}
         </div>
 
         {/* 🔮 爆款神器三板斧 */}

@@ -59,13 +59,34 @@ export async function POST(req) {
 
   const buildContext = () => {
     const p = protagonist || {};
-    let ctx = `世界观：${worldBackground || worldType || "奇幻世界"}。\n主角：${p.name || "主角"}（${p.personality || "未设定"}，能力${p.ability || "未设定"}，弱点${p.weakness || "未设定"}）。\n`;
-    if (allies?.length) ctx += `正派：${allies.map(a => `${a.name}(${a.relation})`).join("、")}。\n`;
-    if (enemies?.length) ctx += `反派：${enemies.map(e => `${e.name}(${e.relation})`).join("、")}。\n`;
-    ctx += `风格要求：${style || "热血"}。`;
-    if (economyMode) {
-      ctx = `世界观：${(worldBackground || worldType || "奇幻").slice(0, 80)}。主角：${p.name || "主角"}。正派/反派：${[...(allies||[]).map(a=>a.name), ...(enemies||[]).map(e=>e.name)].filter(Boolean).join(",") || "无"}。风格：${style || "热血"}。`;
+    let ctx = "";
+    ctx += "┌ [世界观权威设定 - 生成时必须严格遵守，不得违反] ┐\n";
+    ctx += "世界观类型：" + (worldType || "未设定") + "\n";
+    ctx += "世界观详情：" + (worldBackground || "未设定") + "\n";
+    ctx += "风格：" + (style || "热血") + "\n";
+    ctx += "\n=== 主角权威设定 ===\n";
+    ctx += "姓名：" + (p.name || "主角") + "  性格：" + (p.personality || "未设定") + "  能力：" + (p.ability || "未设定") + "  弱点：" + (p.weakness || "未设定") + "\n";
+    ctx += "【规则】主角能力/性格/说话方式不可偏离设定。不可突然拥有未设定的新能力。\n";
+    if (allies?.length) {
+      ctx += "\n=== 盟友权威设定 ===\n";
+      for (const a of allies) {
+        ctx += "◆ " + a.name + "：性格" + (a.personality || "?") + " 能力" + (a.ability || "?") + " 弱点" + (a.weakness || "?") + " 关系" + (a.relation || "?") + "\n";
+        ctx += "  【装备规则】" + a.name + "的战斗方式必须与其能力一致。" + (a.ability?.includes("剑") ? "只用剑，绝不出现枪炮、机械义肢、科技武器" : a.ability?.includes("枪") ? "用枪，不用冷兵器" : a.ability?.includes("雷") ? "雷电近身，不用外部武器" : "按其能力特性战斗") + "\n";
+      }
     }
+    if (enemies?.length) {
+      ctx += "\n=== 反派权威设定 ===\n";
+      for (const e of enemies) {
+        ctx += "◆ " + e.name + "：性格" + (e.personality || "?") + " 能力" + (e.ability || "?") + " 弱点" + (e.weakness || "?") + " 关系" + (e.relation || "?") + "\n";
+        ctx += "  【装备规则】" + e.name + "的战斗方式必须与其能力一致。" + (e.ability?.includes("剑") ? "只用剑，绝不出现枪炮、机械义肢、科技武器" : e.ability?.includes("枪") ? "用枪，不用冷兵器" : e.ability?.includes("雷") ? "雷电近身，不用外部武器" : "按其能力特性战斗") + "\n";
+      }
+    }
+    ctx += "\n=== 全局铁律 ===\n";
+    ctx += "1. 世界观统一性：" + (worldType || "修仙") + "世界观下，不可出现与世界观矛盾的元素。修仙世界不出现现代科技、ICU、手机、电脑。\n";
+    ctx += "2. 道具一致性：所有道具、武器、法器必须符合世界观设定。修仙世界用灵器、法宝、剑、丹药，不用科技装备。\n";
+    ctx += "3. 能力体系：所有角色能力必须在世界观框架内，不可跨世界观使用能力。\n";
+    ctx += "4. 时代一致性：背景设定为古代/修仙时代，不可出现现代元素。\n";
+    ctx += "\n└ [以上为权威设定，生成内容不得违反] ┘\n";
     return ctx;
   };
 
@@ -178,7 +199,7 @@ export async function POST(req) {
     const feedback = body.feedback || "";
     let targetLength = economyMode ? "500-700字" : "900-1200字";
 
-    const prompt = `你是一位有独特文风的网文作家。请根据以下信息写出第${chapterIndex + 1}章正文。
+    const prompt = `你是一位网文作家。你的任务是严格按照下面的世界观权威设定写作。任何偏离设定的内容都是不合格的。请根据以下信息写出第${chapterIndex + 1}章正文。
 
 【世界观与设定】
 ${worldBackground || worldType}
@@ -192,9 +213,9 @@ ${enemies?.length ? "对手：" + enemies.map(e => `${e.name}(${e.relation})`).j
 【上章摘要】${previousSummary}
 
 【角色约束——请严格遵循，但以下面自然的方式融入写作，不要生硬说明】
-- 林夜：不是圣人。有脾气但压着，有恐惧但不逃。说话短，有时候太短让人误会。对自己狠，对敌人更狠。但面对苏婉清不一样——那是他唯一不设防的人
-- 苏婉清：看起来温柔但所有人都怕她生气。做事周到到令人发指。说话直接，林夜犯傻她会讽刺。她的温柔不是柔弱——是能力太强不用凶
-- 顾青云：不是疯批反派。穿白西装喝红酒，说话有礼貌，做事有原则——只是他的原则和别人不一样。三年前的事他认为是对的。他和林夜之间不是单纯仇恨，是都回不去了。他独处时会看一张旧照片
+- 林夜：不是圣人。有脾气但压着，有恐惧但不逃。说话短，有时候太短让人误会。对自己狠，对敌人更狠。但面对苏婉清不一样——那是他唯一不设防的人。战斗方式：雷电淬体近身搏斗，不用外部武器，靠赤雷和拳头。战斗方式：雷电淬体近身搏斗，不用外部武器，靠赤雷和拳头。战斗方式：雷电淬体近身搏斗，不用外部武器，靠赤雷和拳头
+- 苏婉清：看起来温柔但所有人都怕她生气。做事周到到令人发指。说话直接，林夜犯傻她会讽刺。她的温柔不是柔弱——是能力太强不用凶。战斗方式：灵能辅助，不主攻，以灵器和符箓为主。战斗方式：灵能辅助，不主攻，以灵器和符箓为主。战斗方式：灵能辅助，不主攻，以灵器和符箓为主
+- 顾青云：不是疯批反派。穿白西装喝红酒，说话有礼貌，做事有原则——只是他的原则和别人不一样。三年前的事他认为是对的。他和林夜之间不是单纯仇恨，是都回不去了。他独处时会看一张旧照片。\n【装备铁律】顾青云只用剑（天赋剑意化形），绝不使用枪炮、机械义肢、科技武器。他的战斗场景必须出现剑或剑意，不能出现炮管、子弹、机械臂等科技装备。\n【装备铁律】顾青云只用剑（天赋剑意化形），绝不使用枪炮、机械义肢、科技武器。他的战斗场景必须出现剑或剑意，不能出现炮管、子弹、机械臂等科技装备。\n【装备铁律】顾青云只用剑（天赋剑意化形），绝不使用枪炮、机械义肢、科技武器。他的战斗场景必须出现剑或剑意，不能出现炮管、子弹、机械臂等科技装备
 
 【写作要求】
 - 从上章结尾自然开始，像翻书翻到下一页
@@ -202,11 +223,14 @@ ${enemies?.length ? "对手：" + enemies.map(e => `${e.name}(${e.relation})`).j
 - 结尾停在角色面临选择的时刻，而不是刻意制造悬念
 - 对话要贴合角色：林夜话少但到位，苏婉清直接不绕弯，顾青云话里有话
 - 描写具体的东西：物品的质感、光线的方向、声音的远近——而不是抽象的感受
-- 禁止使用的AI套路词和句式：
+- 【硬性禁止】以下现代元素一律不出现：手机、电脑、电话、短信、微信、ICU、医院、救护车、手术、注射、电梯、电灯、电网、WiFi、网络、屏幕。取代方案：传讯=传音符/灵鸽/飞剑传书，治疗=丹药/灵气疗伤，照明=夜明珠/灵灯，记录=玉简/卷轴。
+            禁止使用的AI套路词和句式：
   “空气中弥漫着” “他的眼中闪过” “嘴角勾起一抹” “就在这时” “突然”后面紧跟“然而”
   “在XX的世界里” “随着XX的发展” “不仅仅” “仿佛在说” “似乎”
 - 不要解释角色动机。让读者通过角色的行为自己理解
 - 节奏要有呼吸：紧张场景后给一两段日常——林夜怎么吃饭、苏婉清怎么整理装备、顾青云独处时在想什么
+${continuationHook ? `【写作方向引导——请围绕以下方向展开本章，自然融入不要生硬】${continuationHook}
+` : ""}
 字数：${targetLength}。输出正文后另起一行"【本章摘要】："加100字内摘要。`;
 
     const result = await callAI([
@@ -764,7 +788,7 @@ ${textToAnalyze.slice(0, 12000)}`;
 
     for (let i = 0; i < maxChapters; i++) {
       // 1. 生成章节
-      const chapterPrompt = `章节：第${currentIndex+1}章。上章摘要：${currentPrevSummary}。续写方向：${continuationHook}。风格：${style}`
+      const chapterPrompt = `你是一位网文作家。你的任务是严格按照下面的世界观权威设定写作。任何偏离设定的内容都是不合格的。请根据以下信息写出第${currentIndex+1}章正文。\n\n【世界观与设定】\n${worldBackground || worldType}\n主角：${protagonist.name}（性格${protagonist.personality || "复杂立体"}，能力${protagonist.ability || "在成长中"}，弱点${protagonist.weakness || "人性"}）\n${allies?.length ? "盟友：" + allies.map(a => `${a.name}(${a.relation}, 能力${a.ability})`).join("、") : ""}\n${enemies?.length ? "对手：" + enemies.map(e => `${e.name}(${e.relation}, 能力${e.ability})`).join("、") : ""}\n风格：${style}\n\n【本章】续写方向：${continuationHook || "顺承上文"}\n【上章摘要】${currentPrevSummary}\n\n【装备铁律】能力中含"剑"的角色用剑（绝不出现枪炮机械义肢），能力中含"枪"的角色用枪，能力中含"雷"的角色以雷电近身为主\n\n【写作要求】\n- 从上章结尾自然开始\n- 情节由角色性格推动\n- 对话贴合角色\n- 禁止AI套路词："空气中弥漫着" "他的眼中闪过" "嘴角勾起一抹" "就在这时"\n字数：900-1200字。输出正文后另起一行"【本章摘要】："加100字内摘要。`
       let chapterResult;
       try {
         chapterResult = await callAI([
@@ -797,9 +821,9 @@ ${textToAnalyze.slice(0, 12000)}`;
       let fixed = false;
       if (auditIssues.filter(iss => iss.severity === "严重").length > 0) {
         try {
-          const fixPrompt = `章节：第${currentIndex+1}章。上章摘要：${currentPrevSummary}`
+          const fixPrompt = `你是一位网文作家。请重写第${currentIndex+1}章正文，必须修正以下审核发现的问题：\n${auditIssues.filter(iss => iss.severity === "严重").map(iss => `- ${iss.character}：${iss.problem} → ${iss.fix}`).join("\\n")}\n\n【设定参考】世界观：${worldBackground || worldType} 主角：${protagonist.name}（能力${protagonist.ability}）风格：${style}\n【装备铁律】能力中含"剑"的角色用剑（绝不出现枪炮机械义肢），能力中含"枪"的角色用枪\n【上章摘要】${currentPrevSummary}\n\n请输出修正后的正文，另起一行"【本章摘要】："加摘要。`
           const fixResult = await callAI([
-            { role: "system", content: "你是一个写小说的。重写这一章，修正所有问题。" },
+            { role: "system", content: "你是一个写小说的。严格按修正要求重写这一章，特别注意装备与武器一致性，能力中含\"剑\"的角色绝不出现枪炮机械义肢。" },
             { role: "user", content: fixPrompt },
           ], 1800);
           const fixSummaryMatch = fixResult.match(/【本章摘要】：([sS]*)/);
@@ -847,6 +871,33 @@ ${textToAnalyze.slice(0, 12000)}`;
     const result = await callAI([{role:"system",content:"你是小说结构师。输出严格JSON。"},{role:"user",content:prompt}],1500);
     try { return Response.json(JSON.parse(result.replace(/`json|`/g,"").trim())); }
     catch { return Response.json({connections:[],masterKey:"分析失败"}); }
+  }
+
+
+  // 16. 提取设定模式：AI分析已生成内容，返回更新后的设定
+  if (mode === "extract_settings") {
+    const chapterContent = body.chapterContent || "";
+    const existingSettings = body.existingSettings || {};
+    const prompt = `你是小说设定分析师。请从下面小说内容中提取新元素，输出严格JSON：
+{
+  "newCharacters": [{"name":"名字","personality":"性格","ability":"能力","weakness":"弱点","relation":"与主角关系"}],
+  "newItems": [{"name":"道具/武器名","type":"类型","owner":"属于谁","effect":"效果"}],
+  "newLocations": [{"name":"地点名","type":"类型","description":"描述"}],
+  "powerSystemUpdates": "能力体系新发现",
+  "worldRuleUpdates": "世界观新发现",
+  "consistencyIssues": ["发现的不一致问题"]
+}
+已有设定：${JSON.stringify(existingSettings)}
+内容：${chapterContent.slice(0, 4000)}`;
+    const result = await callAI([
+      { role: "system", content: "你是小说设定分析师。输出严格JSON。" },
+      { role: "user", content: prompt },
+    ], 1200);
+    try {
+      return Response.json(JSON.parse(result.replace(/```json|```/g, "").trim()));
+    } catch {
+      return Response.json({ newCharacters:[], newItems:[], newLocations:[], powerSystemUpdates:"", worldRuleUpdates:"", consistencyIssues:["解析失败"] });
+    }
   }
 
   return Response.json({ error: `未知模式: ${mode}` }, { status: 400 });
