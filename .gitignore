@@ -42,3 +42,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local output
+/output/node_modules
+output/node_modules
+
+# backup files
+*.bak
