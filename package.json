@@ -2,7 +2,7 @@
   "name": "ai-novel-studio",
   "version": "1.0.0",
   "private": true,
-  "description": "AI Novel Studio - AI辅助网文创作工具",
+  "description": "AI Novel Studio - AI\u8f85\u52a9\u7f51\u6587\u521b\u4f5c\u5de5\u5177",
   "author": "AI Novel Studio",
   "main": "electron/main.js",
   "scripts": {
@@ -28,10 +28,16 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": ".env.local", "to": ".env.local" }
+      {
+        "from": ".env.local",
+        "to": ".env.local"
+      }
     ],
     "win": {
-      "target": ["portable", "nsis"],
+      "target": [
+        "portable",
+        "nsis"
+      ],
       "icon": "public/favicon.ico"
     },
     "nsis": {
@@ -42,7 +48,8 @@
   "dependencies": {
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "docx": "^9.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",

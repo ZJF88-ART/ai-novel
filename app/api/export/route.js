@@ -13,19 +13,10 @@ export async function POST(req) {
       return Response.json({ error: "no chapters" }, { status: 400 });
     }
 
-    const doc = new Document({
-      styles: {
-        default: {
-          document: {
-            run: { font: "SimSun", size: 24 },
-          },
-        },
-      },
-      sections: [],
-    });
+    const allSections = [];
 
     // Title section
-    doc.addSection({
+    allSections.push({
       children: [
         new Paragraph({
           text: title || "AI Novel Studio",
@@ -51,17 +42,17 @@ export async function POST(req) {
     for (let i = 0; i < chapters.length; i++) {
       const ch = chapters[i];
       const chTitle = ch.title || ("Chapter " + (i + 1));
-      let content = ch.content || "";
+      let textContent = ch.content || "";
 
-      if (content.startsWith("# ")) {
-        const lines = content.split("\n");
-        content = lines.slice(1).join("\n");
+      if (textContent.startsWith("# ")) {
+        const lines = textContent.split("\n");
+        textContent = lines.slice(1).join("\n");
       }
 
-      const sumIdx = content.indexOf("\u3010\u672c\u7ae0\u6458\u8981\u3011");
-      if (sumIdx > 0) content = content.substring(0, sumIdx);
-      const sumIdx2 = content.indexOf("\u3010\u6458\u8981\u3011");
-      if (sumIdx2 > 0) content = content.substring(0, sumIdx2);
+      const sumIdx = textContent.indexOf("\u3010\u672c\u7ae0\u6458\u8981\u3011");
+      if (sumIdx > 0) textContent = textContent.substring(0, sumIdx);
+      const sumIdx2 = textContent.indexOf("\u3010\u6458\u8981\u3011");
+      if (sumIdx2 > 0) textContent = textContent.substring(0, sumIdx2);
 
       const children = [
         new Paragraph({
@@ -71,7 +62,7 @@ export async function POST(req) {
         }),
       ];
 
-      const paragraphs = content.split("\n\n").filter(p => p.trim());
+      const paragraphs = textContent.split("\n\n").filter(p => p.trim());
       for (const pt of paragraphs) {
         children.push(
           new Paragraph({
@@ -88,11 +79,21 @@ export async function POST(req) {
         );
       }
 
-      doc.addSection({ children });
+      allSections.push({ children });
     }
 
-    const buffer = await Packer.toBuffer(doc);
+    const doc = new Document({
+      styles: {
+        default: {
+          document: {
+            run: { font: "SimSun", size: 24 },
+          },
+        },
+      },
+      sections: allSections,
+    });
 
+    const buffer = await Packer.toBuffer(doc);
     const filename = encodeURIComponent((title || "novel")) + ".docx";
     return new Response(buffer, {
       headers: {

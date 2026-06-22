@@ -43,4 +43,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/output
+/output`r`n# local output`r`n/output/node_modules`r`noutput/node_modules`r`n`r`n# backup files`r`n*.bak
